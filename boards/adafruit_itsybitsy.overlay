@@ -1,0 +1,64 @@
+/*
+ * Copyright (c) 2021 Nordic Semiconductor ASA
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* This devicetree overlay file will be automatically picked by the Zephyr
+ * build system when building the sample for the nucleo_f302r8 board. It shows
+ * how the example-application can be built on sample boards already provided
+ * by Zephyr.
+ */
+
+/ {
+	aliases {
+		speaker-i2s = &i2s0;
+	};
+};
+
+&pinctrl {
+	/* i2s0 pin config:
+	 * SCK:  P1.08, pin "7" on PCB
+	 * LRCK: P0.07, pin "9" on PCB
+	 * SDOUT: P0.05, pin "10" on PCB
+	 */
+	i2s0_default: i2s0_default {
+		group1 {
+			psels = <NRF_PSEL(I2S_SCK_M, 1, 8)>,
+				<NRF_PSEL(I2S_LRCK_M, 0, 7)>,
+				<NRF_PSEL(I2S_SDOUT, 0, 5)>;
+		};
+	};
+
+	i2s0_sleep: i2s0_sleep {
+		group1 {
+			psels = <NRF_PSEL(I2S_SCK_M, 1, 8)>,
+				<NRF_PSEL(I2S_LRCK_M, 0, 7)>,
+				<NRF_PSEL(I2S_SDOUT, 0, 5)>;
+			low-power-enable;
+		};
+	};
+};
+
+&i2s0 {
+	compatible = "nordic,nrf-i2s";
+	status = "okay";
+	pinctrl-0 = <&i2s0_default>;
+	pinctrl-1 = <&i2s0_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&spi1 {
+	/* microSD Card */
+	cs-gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;
+	sdhc0: sdhc@0 {
+		status = "okay";
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		mmc {
+			status = "okay";
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "SD";
+		};
+	};
+};
