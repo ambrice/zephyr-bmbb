@@ -6,6 +6,8 @@ sample:
   name: bmbb 
 common:
   build_only: true
+  modules:
+    - fatfs
   integration_platforms:
     - adafruit_itsybitsy
 tests:
