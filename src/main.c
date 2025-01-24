@@ -21,7 +21,7 @@ static FATFS fat_fs;
 static struct fs_mount_t mp = {
 	.type = FS_FATFS,
 	.fs_data = &fat_fs,
-    .flags = FS_MOUNT_FLAG_READ_ONLY | FS_MOUNT_FLAG_NO_FORMAT,
+	.flags = FS_MOUNT_FLAG_READ_ONLY | FS_MOUNT_FLAG_NO_FORMAT,
 };
 
 #define FS_RET_OK FR_OK
@@ -29,6 +29,8 @@ static struct fs_mount_t mp = {
 LOG_MODULE_REGISTER(main);
 
 static const char *disk_mount_pt = DISK_MOUNT_PT;
+
+void register_shell_cmds(void);
 
 /* List dir entry by path
  *
@@ -67,7 +69,7 @@ static int lsdir(const char *path)
 			LOG_INF("[DIR ] %s", entry.name);
 		} else {
 			LOG_INF("[FILE] %s (size = %zu)",
-				entry.name, entry.size);
+					entry.name, entry.size);
 		}
 		count++;
 	}
@@ -83,6 +85,8 @@ static int lsdir(const char *path)
 
 int main(void)
 {
+    register_shell_cmds();
+
 	/* raw disk i/o */
 	do {
 		static const char *disk_pdrv = DISK_DRIVE_NAME;
@@ -91,20 +95,20 @@ int main(void)
 		uint32_t block_size;
 
 		if (disk_access_ioctl(disk_pdrv,
-				DISK_IOCTL_CTRL_INIT, NULL) != 0) {
+					DISK_IOCTL_CTRL_INIT, NULL) != 0) {
 			LOG_ERR("Storage init ERROR!");
 			break;
 		}
 
 		if (disk_access_ioctl(disk_pdrv,
-				DISK_IOCTL_GET_SECTOR_COUNT, &block_count)) {
+					DISK_IOCTL_GET_SECTOR_COUNT, &block_count)) {
 			LOG_ERR("Unable to get sector count");
 			break;
 		}
 		LOG_INF("Block count %u", block_count);
 
 		if (disk_access_ioctl(disk_pdrv,
-				DISK_IOCTL_GET_SECTOR_SIZE, &block_size)) {
+					DISK_IOCTL_GET_SECTOR_SIZE, &block_size)) {
 			LOG_ERR("Unable to get sector size");
 			break;
 		}
@@ -114,7 +118,7 @@ int main(void)
 		LOG_INF("Memory Size(MB) %u", (uint32_t)(memory_size_mb >> 20));
 
 		if (disk_access_ioctl(disk_pdrv,
-				DISK_IOCTL_CTRL_DEINIT, NULL) != 0) {
+					DISK_IOCTL_CTRL_DEINIT, NULL) != 0) {
 			LOG_ERR("Storage deinit ERROR!");
 			break;
 		}
@@ -131,7 +135,7 @@ int main(void)
 		LOG_ERR("Error mounting disk.");
 	}
 
-	fs_unmount(&mp);
+	//fs_unmount(&mp);
 
 	while (1) {
 		k_sleep(K_MSEC(1000));
