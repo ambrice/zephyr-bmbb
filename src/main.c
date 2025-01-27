@@ -26,7 +26,7 @@ static struct fs_mount_t mp = {
 
 #define FS_RET_OK FR_OK
 
-LOG_MODULE_REGISTER(main);
+LOG_MODULE_REGISTER(bmbb);
 
 static const char *disk_mount_pt = DISK_MOUNT_PT;
 
@@ -39,14 +39,15 @@ void register_shell_cmds(void);
  * @return Negative errno code on error, number of listed entries on
  *         success.
  */
-static int lsdir(const char *path)
+static int find_songs(const char *path)
 {
 	int res;
 	struct fs_dir_t dirp;
+    struct fs_file_t filep;
 	static struct fs_dirent entry;
-	int count = 0;
 
 	fs_dir_t_init(&dirp);
+    fs_file_t_init(&filep);
 
 	/* Verify fs_opendir() */
 	res = fs_opendir(&dirp, path);
@@ -55,7 +56,6 @@ static int lsdir(const char *path)
 		return res;
 	}
 
-	LOG_INF("\nListing dir %s ...", path);
 	for (;;) {
 		/* Verify fs_readdir() */
 		res = fs_readdir(&dirp, &entry);
@@ -65,64 +65,40 @@ static int lsdir(const char *path)
 			break;
 		}
 
-		if (entry.type == FS_DIR_ENTRY_DIR) {
-			LOG_INF("[DIR ] %s", entry.name);
-		} else {
-			LOG_INF("[FILE] %s (size = %zu)",
-					entry.name, entry.size);
+		if (entry.type != FS_DIR_ENTRY_DIR) {
+            size_t namelen = strlen(entry.name);
+            if (strncmp(entry.name + namelen - 4, ".WAV", 4) == 0)
+            {
+                /* Find the .dat file with the instructions */
+                size_t buffersz = strlen(path) + namelen + 2;
+                char *wavfile = k_malloc(buffersz);
+                char *datfile = k_malloc(buffersz);
+                memset(wavfile, 0, buffersz);
+                memset(datfile, 0, buffersz);
+                snprintf(wavfile, buffersz, "%s/%s", path, entry.name);
+                strncpy(datfile, wavfile, buffersz);
+                /* Replace the .WAV with .DAT */
+                char *dot = strrchr(datfile, '.');
+                if (dot != NULL) {
+                    *dot = '\0';
+                    strcat(datfile, ".DAT");
+                } else {
+                    LOG_ERR("Couldn't find the . in filename %s ?!", datfile);
+                }
+                bmbbp_add(wavfile, datfile);
+            }
 		}
-		count++;
 	}
 
 	/* Verify fs_closedir() */
 	fs_closedir(&dirp);
-	if (res == 0) {
-		res = count;
-	}
 
-	return res;
+	return 0;
 }
 
 int main(void)
 {
     register_shell_cmds();
-
-	/* raw disk i/o */
-	do {
-		static const char *disk_pdrv = DISK_DRIVE_NAME;
-		uint64_t memory_size_mb;
-		uint32_t block_count;
-		uint32_t block_size;
-
-		if (disk_access_ioctl(disk_pdrv,
-					DISK_IOCTL_CTRL_INIT, NULL) != 0) {
-			LOG_ERR("Storage init ERROR!");
-			break;
-		}
-
-		if (disk_access_ioctl(disk_pdrv,
-					DISK_IOCTL_GET_SECTOR_COUNT, &block_count)) {
-			LOG_ERR("Unable to get sector count");
-			break;
-		}
-		LOG_INF("Block count %u", block_count);
-
-		if (disk_access_ioctl(disk_pdrv,
-					DISK_IOCTL_GET_SECTOR_SIZE, &block_size)) {
-			LOG_ERR("Unable to get sector size");
-			break;
-		}
-		LOG_INF("Sector size %u", block_size);
-
-		memory_size_mb = (uint64_t)block_count * block_size;
-		LOG_INF("Memory Size(MB) %u", (uint32_t)(memory_size_mb >> 20));
-
-		if (disk_access_ioctl(disk_pdrv,
-					DISK_IOCTL_CTRL_DEINIT, NULL) != 0) {
-			LOG_ERR("Storage deinit ERROR!");
-			break;
-		}
-	} while (0);
 
 	mp.mnt_point = disk_mount_pt;
 
@@ -130,7 +106,7 @@ int main(void)
 
 	if (res == FS_RET_OK) {
 		LOG_INF("Disk mounted.");
-		lsdir(disk_mount_pt);
+		find_songs(disk_mount_pt);
 	} else {
 		LOG_ERR("Error mounting disk.");
 	}
