@@ -5,29 +5,14 @@
 #include <zephyr/sys/slist.h>
 #include <zephyr/logging/log.h>
 
+#include "bmbbp.h"
+
 /* Source code for the Big Mouth Billy Bass Protocol (bmbbp) */
 
-typedef enum {
-	HEAD,
-	MOUTH,
-	TAIL,
-	RELEASE,
-} movement_t;
-
-struct movement_instruction {
-	sys_snode_t node;
-	movement_t type;
-	uint32_t timestamp;
-};
-
-struct bmbbp_audio {
-	sys_snode_t node;
-	const char *wav;
-	sys_slist_t instructions;
-};
-
 /* Top list of audio files, which each have a list of instructions associated */
-static sys_slist_t audios = SYS_SLIST_STATIC_INIT(&audios);
+static sys_slist_t s_audios = SYS_SLIST_STATIC_INIT(&s_audios);
+static struct bmbbp_audio *s_current_audio = NULL;
+static bool s_currently_playing = false;
 
 LOG_MODULE_DECLARE(bmbb);
 
@@ -82,8 +67,9 @@ int bmbbp_add(const char *wavfilename, const char *datfilename)
 	new->wav = wavfilename;
 	sys_slist_init(&new->instructions);
 	if (add_instructions(datfilename, &new->instructions) == 0) {
+		new->current_instruction = NULL;
 		LOG_INF("Added %d instructions for song %s", sys_slist_len(&new->instructions), new->wav);
-		sys_slist_append(&audios, &new->node);
+		sys_slist_append(&s_audios, &new->node);
 		return 0;
 	} else {
 		/* Failed to parse instructions, don't add this to the list */
@@ -92,4 +78,62 @@ int bmbbp_add(const char *wavfilename, const char *datfilename)
 	}
 }
 
+const char *bmbbp_next_song(void)
+{
+	if (s_current_audio == NULL || s_current_audio == SYS_SLIST_PEEK_TAIL_CONTAINER(&s_audios, s_current_audio, node)) {
+		s_current_audio = SYS_SLIST_PEEK_HEAD_CONTAINER(&s_audios, s_current_audio, node);
+	} else {
+		s_current_audio = SYS_SLIST_PEEK_NEXT_CONTAINER(s_current_audio, node);
+	}
 
+	if (s_current_audio != NULL) {
+		return s_current_audio->wav;
+	}
+	return NULL;
+}
+
+struct movement_instruction *bmbbp_next_instruction(void)
+{
+	if (s_current_audio == NULL) {
+		LOG_ERR("bmbbp next_instruction called before next_song");
+		return NULL;
+	}
+
+	if (s_current_audio->current_instruction == NULL) {
+		s_current_audio->current_instruction = SYS_SLIST_PEEK_HEAD_CONTAINER(&s_current_audio->instructions, s_current_audio->current_instruction, node);
+	} else {
+		s_current_audio->current_instruction = SYS_SLIST_PEEK_NEXT_CONTAINER(s_current_audio->current_instruction, node);
+	}
+	return s_current_audio->current_instruction;
+}
+
+const char *bmbbp_current_song(void)
+{
+	if (s_current_audio == NULL || !s_currently_playing) {
+		return NULL;
+	}
+	return s_current_audio->wav;
+}
+
+void bmbbp_cancel_current_song(void)
+{
+	if (s_current_audio != NULL && s_currently_playing) {
+		/* TODO: stop the presses! */
+		s_currently_playing = false;
+	}
+}
+
+const char *bmbbp_start_playing(void)
+{
+	if (s_current_audio == NULL) {
+		LOG_ERR("bmbbp start_playing called before next_song");
+		return NULL;
+	} else if (s_currently_playing) {
+		LOG_ERR("bmbbp start_playing called while previous song still playing");
+		return NULL;
+	}
+
+	/* TODO: start the presses! */
+	s_currently_playing = true;
+	return s_current_audio->wav;
+}

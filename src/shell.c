@@ -2,6 +2,8 @@
 #include <zephyr/shell/shell.h>
 #include <zephyr/sys/reboot.h>
 
+#include "bmbbp.h"
+
 /* For the UF2 bootloader, we can trigger DFU mode by 
  * writing magic value 0x57 to GPREGRET register and then rebooting.
  */
@@ -28,7 +30,48 @@ static int dfu_handler(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-void register_shell_cmds(void)
+SHELL_CMD_REGISTER(dfu, NULL, "Go to DFU mode for UF2", dfu_handler);
+
+static int bmbb_cancel_handler(const struct shell *sh, size_t argc, char **argv)
 {
-	SHELL_CMD_REGISTER(dfu, NULL, "Go to DFU mode for UF2", dfu_handler);
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	const char *wav = bmbbp_current_song();
+	if (wav == NULL) {
+		shell_print(sh, "No current song playing");
+	} else {
+		shell_print(sh, "Canceling %s", wav);
+		bmbbp_cancel_current_song();
+	}
+	return 0;
 }
+
+static int bmbb_next_handler(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	const char *wav = bmbbp_next_song();
+	shell_print(sh, "Next song is now %s", wav);
+	return 0;
+}
+
+static int bmbb_play_handler(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	const char *wav = bmbbp_start_playing();
+	shell_print(sh, "Now playing %s", wav);
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_bmbb,
+		SHELL_CMD(cancel, NULL, "Cancel current audio", bmbb_cancel_handler),
+		SHELL_CMD(next, NULL, "Set to next audio", bmbb_next_handler),
+		SHELL_CMD(play, NULL, "Play current audio", bmbb_play_handler),
+		SHELL_SUBCMD_SET_END
+);
+
+SHELL_CMD_REGISTER(bmbb, &sub_bmbb, "Big Mouth Billy Bass commands", NULL);

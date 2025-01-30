@@ -4,11 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/kernel.h>
 #include <zephyr/device.h>
-#include <zephyr/storage/disk_access.h>
-#include <zephyr/logging/log.h>
 #include <zephyr/fs/fs.h>
+#include <zephyr/input/input.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/storage/disk_access.h>
+
+#include "bmbbp.h"
 
 #define DISK_DRIVE_NAME "SD"
 #define DISK_MOUNT_PT "/"DISK_DRIVE_NAME":"
@@ -96,10 +99,21 @@ static int find_songs(const char *path)
 	return 0;
 }
 
+static void input_cb(struct input_event *evt, void *user_data)
+{
+	ARG_UNUSED(user_data);
+
+	LOG_INF("input event %u val %d", evt->code, evt->value);
+	bmbbp_cancel_current_song();
+	const char *wav = bmbbp_next_song();
+	LOG_INF("Playing song %s", wav);
+	bmbbp_start_playing();
+}
+
+INPUT_CALLBACK_DEFINE(NULL, input_cb, NULL);
+
 int main(void)
 {
-    register_shell_cmds();
-
 	mp.mnt_point = disk_mount_pt;
 
 	int res = fs_mount(&mp);
@@ -109,12 +123,6 @@ int main(void)
 		find_songs(disk_mount_pt);
 	} else {
 		LOG_ERR("Error mounting disk.");
-	}
-
-	//fs_unmount(&mp);
-
-	while (1) {
-		k_sleep(K_MSEC(1000));
 	}
 
 	return 0;
