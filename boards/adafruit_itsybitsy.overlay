@@ -13,6 +13,15 @@
 	aliases {
 		speaker-i2s = &i2s0;
 	};
+
+	longpress: longpress {
+		input = <&{/buttons}>;
+		compatible = "zephyr,input-longpress";
+		input-codes = <INPUT_KEY_0>, <INPUT_KEY_1>;
+		short-codes = <INPUT_KEY_A>, <INPUT_KEY_A>;
+		long-codes  = <INPUT_KEY_B>, <INPUT_KEY_B>;
+		long-delay-ms = <3000>;
+	};
 };
 
 &pinctrl {

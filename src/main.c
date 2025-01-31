@@ -40,17 +40,17 @@ void register_shell_cmds(void);
  * @param path Absolute path to list
  *
  * @return Negative errno code on error, number of listed entries on
- *         success.
+ *		   success.
  */
 static int find_songs(const char *path)
 {
 	int res;
 	struct fs_dir_t dirp;
-    struct fs_file_t filep;
+	struct fs_file_t filep;
 	static struct fs_dirent entry;
 
 	fs_dir_t_init(&dirp);
-    fs_file_t_init(&filep);
+	fs_file_t_init(&filep);
 
 	/* Verify fs_opendir() */
 	res = fs_opendir(&dirp, path);
@@ -69,27 +69,27 @@ static int find_songs(const char *path)
 		}
 
 		if (entry.type != FS_DIR_ENTRY_DIR) {
-            size_t namelen = strlen(entry.name);
-            if (strncmp(entry.name + namelen - 4, ".WAV", 4) == 0)
-            {
-                /* Find the .dat file with the instructions */
-                size_t buffersz = strlen(path) + namelen + 2;
-                char *wavfile = k_malloc(buffersz);
-                char *datfile = k_malloc(buffersz);
-                memset(wavfile, 0, buffersz);
-                memset(datfile, 0, buffersz);
-                snprintf(wavfile, buffersz, "%s/%s", path, entry.name);
-                strncpy(datfile, wavfile, buffersz);
-                /* Replace the .WAV with .DAT */
-                char *dot = strrchr(datfile, '.');
-                if (dot != NULL) {
-                    *dot = '\0';
-                    strcat(datfile, ".DAT");
-                } else {
-                    LOG_ERR("Couldn't find the . in filename %s ?!", datfile);
-                }
-                bmbbp_add(wavfile, datfile);
-            }
+			size_t namelen = strlen(entry.name);
+			if (strncmp(entry.name + namelen - 4, ".WAV", 4) == 0)
+			{
+				/* Find the .dat file with the instructions */
+				size_t buffersz = strlen(path) + namelen + 2;
+				char *wavfile = k_malloc(buffersz);
+				char *datfile = k_malloc(buffersz);
+				memset(wavfile, 0, buffersz);
+				memset(datfile, 0, buffersz);
+				snprintf(wavfile, buffersz, "%s/%s", path, entry.name);
+				strncpy(datfile, wavfile, buffersz);
+				/* Replace the .WAV with .DAT */
+				char *dot = strrchr(datfile, '.');
+				if (dot != NULL) {
+					*dot = '\0';
+					strcat(datfile, ".DAT");
+				} else {
+					LOG_ERR("Couldn't find the . in filename %s ?!", datfile);
+				}
+				bmbbp_add(wavfile, datfile);
+			}
 		}
 	}
 
@@ -103,14 +103,20 @@ static void input_cb(struct input_event *evt, void *user_data)
 {
 	ARG_UNUSED(user_data);
 
-	LOG_INF("input event %u val %d", evt->code, evt->value);
-	bmbbp_cancel_current_song();
-	const char *wav = bmbbp_next_song();
-	LOG_INF("Playing song %s", wav);
-	bmbbp_start_playing();
+	if (evt->code == INPUT_KEY_A && evt->value == 1) {
+		/* Short press, next song/joke */
+		bmbbp_cancel_current_song();
+		const char *wav = bmbbp_next_song();
+		LOG_INF("Playing song %s", wav);
+		bmbbp_start_playing();
+	} else if (evt->code == INPUT_KEY_B && evt->value == 1) {
+		LOG_INF("Long press, switching mode");
+		/* TODO: switch between songs and jokes (files in SONGS/ or JOKES/ directories) */
+	}
 }
 
-INPUT_CALLBACK_DEFINE(NULL, input_cb, NULL);
+static const struct device *const longpress_dev = DEVICE_DT_GET(DT_NODELABEL(longpress));
+INPUT_CALLBACK_DEFINE(longpress_dev, input_cb, NULL);
 
 int main(void)
 {
