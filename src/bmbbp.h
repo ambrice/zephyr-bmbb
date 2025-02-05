@@ -21,11 +21,18 @@ struct bmbbp_audio {
 	struct movement_instruction *current_instruction;
 };
 
+int bmbbp_init();
+
 int bmbbp_add(const char *wavfilename, const char *datfilename);
+
 const char *bmbbp_next_song(void);
+
 struct movement_instruction *bmbbp_next_instruction(void);
+
 const char *bmbbp_current_song(void);
+
 void bmbbp_cancel_current_song(void);
+
 const char *bmbbp_start_playing(void);
 
 #endif // __BMBBP_H__

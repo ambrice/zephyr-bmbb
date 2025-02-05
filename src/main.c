@@ -131,5 +131,7 @@ int main(void)
 		LOG_ERR("Error mounting disk.");
 	}
 
+	bmbbp_init();
+
 	return 0;
 }

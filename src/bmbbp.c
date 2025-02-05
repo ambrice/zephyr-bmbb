@@ -6,6 +6,7 @@
 #include <zephyr/logging/log.h>
 
 #include "bmbbp.h"
+#include "audio.h"
 
 /* Source code for the Big Mouth Billy Bass Protocol (bmbbp) */
 
@@ -58,7 +59,13 @@ static int add_instructions(const char *datfilename, sys_slist_t *instructions)
 		new->timestamp = strtoul(&line[1], NULL, 10);
 		sys_slist_append(instructions, &new->node);
 	}
+	fs_close(&datfile);
 	return 0;
+}
+
+int bmbbp_init(void)
+{
+	return audio_init();
 }
 
 int bmbbp_add(const char *wavfilename, const char *datfilename)
@@ -132,6 +139,8 @@ const char *bmbbp_start_playing(void)
 		LOG_ERR("bmbbp start_playing called while previous song still playing");
 		return NULL;
 	}
+
+	audio_play(s_current_audio->wav);
 
 	/* TODO: start the presses! */
 	s_currently_playing = true;
