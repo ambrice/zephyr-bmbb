@@ -13,7 +13,6 @@
 /* Top list of audio files, which each have a list of instructions associated */
 static sys_slist_t s_audios = SYS_SLIST_STATIC_INIT(&s_audios);
 static struct bmbbp_audio *s_current_audio = NULL;
-static bool s_currently_playing = false;
 
 LOG_MODULE_DECLARE(bmbb);
 
@@ -116,7 +115,7 @@ struct movement_instruction *bmbbp_next_instruction(void)
 
 const char *bmbbp_current_song(void)
 {
-	if (s_current_audio == NULL || !s_currently_playing) {
+	if (s_current_audio == NULL) {
 		return NULL;
 	}
 	return s_current_audio->wav;
@@ -124,9 +123,8 @@ const char *bmbbp_current_song(void)
 
 void bmbbp_cancel_current_song(void)
 {
-	if (s_current_audio != NULL && s_currently_playing) {
-		/* TODO: stop the presses! */
-		s_currently_playing = false;
+	if (s_current_audio != NULL) {
+		audio_cancel();
 	}
 }
 
@@ -135,14 +133,11 @@ const char *bmbbp_start_playing(void)
 	if (s_current_audio == NULL) {
 		LOG_ERR("bmbbp start_playing called before next_song");
 		return NULL;
-	} else if (s_currently_playing) {
-		LOG_ERR("bmbbp start_playing called while previous song still playing");
+	}
+
+	if (audio_play(s_current_audio->wav) != 0) {
 		return NULL;
 	}
 
-	audio_play(s_current_audio->wav);
-
-	/* TODO: start the presses! */
-	s_currently_playing = true;
 	return s_current_audio->wav;
 }

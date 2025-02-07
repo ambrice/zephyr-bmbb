@@ -23,37 +23,89 @@ K_MEM_SLAB_DEFINE_STATIC(mem_slab, BLOCK_SIZE, BLOCK_COUNT, 4);
 
 LOG_MODULE_DECLARE(bmbb);
 
-static bool prepare_transfer(const struct device *i2s_dev)
+/* Define the thread to play audio */
+#define AUDIO_STACK_SIZE 512
+static K_THREAD_STACK_DEFINE(audio_stack_area, AUDIO_STACK_SIZE);
+static struct k_thread audio_thread_data;
+
+static struct {
+	const struct device *i2s_dev;
+	k_tid_t tid;
+	bool cancel;
+	void *mem_block[BLOCK_COUNT];
+	struct fs_file_t file;
+} s_ctx;
+
+void handle_playback(void *, void *, void *)
 {
 	int ret;
+	size_t len;
 
-	for (int i = 0; i < INITIAL_BLOCKS; ++i) {
-		void *mem_block;
-
-		ret = k_mem_slab_alloc(&mem_slab, &mem_block, K_NO_WAIT);
+	/* Apparently need to pre-fill the i2s before starting it */
+	len = fs_read(&s_ctx.file, s_ctx.mem_block[0], BLOCK_SIZE);
+	if (len < 0) {
+		LOG_ERR("Failed to read from wav file: %d", len);
+		goto done;
+	} else if (len > 0) {
+		/* Write the block to the I2S (blocking) */
+		ret = i2s_write(s_ctx.i2s_dev, s_ctx.mem_block[0], len);
 		if (ret < 0) {
-			printk("Failed to allocate audio TX block %d: %d\n", i, ret);
-			return false;
-		}
-
-		memset(mem_block, 0, BLOCK_SIZE);
-
-		ret = i2s_write(i2s_dev, mem_block, BLOCK_SIZE);
-		if (ret < 0) {
-			printk("Failed to write block %d: %d\n", i, ret);
-			return false;
+			LOG_ERR("Failed to write wav block: %d", ret);
+			goto done;
 		}
 	}
 
-	return true;
+	/* Start the stream */
+	ret = i2s_trigger(s_ctx.i2s_dev, I2S_DIR_TX, I2S_TRIGGER_START);
+	if (ret < 0) {
+		LOG_ERR("Failed to start i2s stream: %d", ret);
+		goto done;
+	}
+
+	/* Fill with the rest */
+	int count=0;
+	int block_idx = 1;
+	do {
+		if (s_ctx.cancel) {
+			LOG_INF("audio transmit cancelled");
+			break;
+		}
+
+		/* Read a block from the file */
+		len = fs_read(&s_ctx.file, s_ctx.mem_block[block_idx], BLOCK_SIZE);
+		if (len < 0) {
+			LOG_ERR("Failed to read from wav file: %d", len);
+			break;
+		} else if (len > 0) {
+			/* Write the block to the I2S (blocking) */
+			ret = i2s_write(s_ctx.i2s_dev, s_ctx.mem_block[block_idx], len);
+			if (ret < 0) {
+				LOG_ERR("Failed to write wav block: %d", ret);
+				break;
+			}
+		}
+		if (len < BLOCK_SIZE) {
+			/* End of file */
+			break;
+		}
+		LOG_INF("Sent block %d", count++);
+		block_idx = (block_idx + 1) % BLOCK_COUNT;
+	} while(1);
+
+done:
+	i2s_trigger(s_ctx.i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DROP);
+	fs_close(&s_ctx.file);
 }
 
 int audio_init(void)
 {
-	const struct device *const i2s_dev = DEVICE_DT_GET(I2S_NODE);
+	s_ctx.i2s_dev = DEVICE_DT_GET(I2S_NODE);
+	s_ctx.tid = NULL;
+	s_ctx.cancel = false;
+	fs_file_t_init(&s_ctx.file);
 
-	if (!device_is_ready(i2s_dev)) {
-		LOG_ERR("%s is not ready\n", i2s_dev->name);
+	if (!device_is_ready(s_ctx.i2s_dev)) {
+		LOG_ERR("%s is not ready", s_ctx.i2s_dev->name);
 		return 0;
 	}
 
@@ -68,27 +120,55 @@ int audio_init(void)
 		.timeout = TIMEOUT,
 	};
 
-	int ret = i2s_configure(i2s_dev, I2S_DIR_TX, &cfg);
+	int ret = i2s_configure(s_ctx.i2s_dev, I2S_DIR_TX, &cfg);
 	if (ret < 0) {
-		LOG_ERR("Failed to configure audio stream: %d\n", ret);
+		LOG_ERR("Failed to configure audio stream: %d", ret);
 	}
+
+	/* Allocate the mem_slab blocks */
+	for (int i = 0; i < BLOCK_COUNT; ++i) {
+		ret = k_mem_slab_alloc(&mem_slab, &s_ctx.mem_block[i], K_NO_WAIT);
+		if (ret < 0) {
+			LOG_ERR("Failed to allocate audio TX block %d: %d", i, ret);
+			return ret;
+		}
+	}
+
 	return ret;
 }
 
-/* TODO: Do this in a work queue */
+void audio_cancel(void)
+{
+	if (s_ctx.tid != NULL) {
+		s_ctx.cancel = true;
+		k_thread_join(s_ctx.tid, K_FOREVER);
+	}
+}
+
+bool audio_busy(void)
+{
+	if (s_ctx.tid != NULL && k_thread_join(s_ctx.tid, K_NO_WAIT) != 0) {
+		return true;
+	}
+	return false;
+}
+
 int audio_play(const char *filename)
 {
-	struct fs_file_t file;
+	/* Make sure we're not currently playing */
+	if (audio_busy()) {
+		LOG_ERR("audio_play called while audio thread is running");
+		return -EBUSY;
+	}
 
-	fs_file_t_init(&file);
-	int err = fs_open(&file, filename, FS_O_READ);
+	int err = fs_open(&s_ctx.file, filename, FS_O_READ);
 	if (err != 0) {
 		LOG_ERR("Failed to open %s for reading", filename);
 		return err;
 	}
 
 	struct wav_header wavh;
-	size_t len = fs_read(&file, &wavh, sizeof(wavh));
+	size_t len = fs_read(&s_ctx.file, &wavh, sizeof(wavh));
 	if (len < sizeof(wavh)) {
 		LOG_ERR("Only read %d bytes from audio file %s", len, filename);
 		return len;
@@ -109,6 +189,16 @@ int audio_play(const char *filename)
 	LOG_INF("\tdata_block_id=0x%08x", wavh.data_block_id);
 	LOG_INF("\tdata_size=%d", wavh.data_size);
 
-	fs_close(&file);
+	if (wavh.audio_format != 1 || wavh.nbr_channels != 1 || wavh.frequency != 44100 || wavh.bits_per_sample != 16) {
+		LOG_ERR("WAV file format incorrect, must be mono PCM, 16 bits per sample, 44100");
+		fs_close(&s_ctx.file);
+		return -EINVAL;
+	}
+
+	s_ctx.cancel = false;
+	s_ctx.tid = k_thread_create(&audio_thread_data, audio_stack_area,
+			K_THREAD_STACK_SIZEOF(audio_stack_area),
+			handle_playback, NULL, NULL, NULL, 5, 0, K_NO_WAIT);
+
 	return 0;
 }

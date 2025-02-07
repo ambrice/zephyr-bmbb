@@ -42,6 +42,11 @@ struct wav_header {
 } __attribute__((packed));
 
 int audio_init(void);
+
 int audio_play(const char *filename);
+
+void audio_cancel(void);
+
+bool audio_busy(void);
 
 #endif
