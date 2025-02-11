@@ -24,9 +24,9 @@ K_MEM_SLAB_DEFINE_STATIC(mem_slab, BLOCK_SIZE, BLOCK_COUNT, 4);
 LOG_MODULE_DECLARE(bmbb);
 
 /* Define the thread to play audio */
-#define AUDIO_STACK_SIZE 512
-static K_THREAD_STACK_DEFINE(audio_stack_area, AUDIO_STACK_SIZE);
-static struct k_thread audio_thread_data;
+#define AUDIO_STACK_SIZE 2048
+K_THREAD_STACK_DEFINE(audio_stack_area, AUDIO_STACK_SIZE);
+struct k_thread audio_thread_data;
 
 static struct {
 	const struct device *i2s_dev;
@@ -54,6 +54,7 @@ void handle_playback(void *, void *, void *)
 			goto done;
 		}
 	}
+	k_yield();
 
 	/* Start the stream */
 	ret = i2s_trigger(s_ctx.i2s_dev, I2S_DIR_TX, I2S_TRIGGER_START);
@@ -66,6 +67,7 @@ void handle_playback(void *, void *, void *)
 	int count=0;
 	int block_idx = 1;
 	do {
+		k_yield();
 		if (s_ctx.cancel) {
 			LOG_INF("audio transmit cancelled");
 			break;
@@ -80,7 +82,7 @@ void handle_playback(void *, void *, void *)
 			/* Write the block to the I2S (blocking) */
 			ret = i2s_write(s_ctx.i2s_dev, s_ctx.mem_block[block_idx], len);
 			if (ret < 0) {
-				LOG_ERR("Failed to write wav block: %d", ret);
+				LOG_ERR("Failed to write wav block %d of len %d: %d", block_idx, len, ret);
 				break;
 			}
 		}
