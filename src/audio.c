@@ -1,6 +1,6 @@
+#include <zephyr/drivers/i2s.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/i2s.h>
 #include <zephyr/logging/log.h>
 
 #include "audio.h"

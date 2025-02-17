@@ -2,11 +2,11 @@
 #include <stdlib.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/kernel.h>
-#include <zephyr/sys/slist.h>
 #include <zephyr/logging/log.h>
 
 #include "bmbbp.h"
 #include "audio.h"
+#include "motor.h"
 
 /* Source code for the Big Mouth Billy Bass Protocol (bmbbp) */
 
@@ -64,7 +64,9 @@ static int add_instructions(const char *datfilename, sys_slist_t *instructions)
 
 int bmbbp_init(void)
 {
-	return audio_init();
+	audio_init();
+	motor_init();
+	return 0;
 }
 
 int bmbbp_add(const char *wavfilename, const char *datfilename)
@@ -73,7 +75,6 @@ int bmbbp_add(const char *wavfilename, const char *datfilename)
 	new->wav = wavfilename;
 	sys_slist_init(&new->instructions);
 	if (add_instructions(datfilename, &new->instructions) == 0) {
-		new->current_instruction = NULL;
 		LOG_INF("Added %d instructions for song %s", sys_slist_len(&new->instructions), new->wav);
 		sys_slist_append(&s_audios, &new->node);
 		return 0;
@@ -98,21 +99,6 @@ const char *bmbbp_next_song(void)
 	return NULL;
 }
 
-struct movement_instruction *bmbbp_next_instruction(void)
-{
-	if (s_current_audio == NULL) {
-		LOG_ERR("bmbbp next_instruction called before next_song");
-		return NULL;
-	}
-
-	if (s_current_audio->current_instruction == NULL) {
-		s_current_audio->current_instruction = SYS_SLIST_PEEK_HEAD_CONTAINER(&s_current_audio->instructions, s_current_audio->current_instruction, node);
-	} else {
-		s_current_audio->current_instruction = SYS_SLIST_PEEK_NEXT_CONTAINER(s_current_audio->current_instruction, node);
-	}
-	return s_current_audio->current_instruction;
-}
-
 const char *bmbbp_current_song(void)
 {
 	if (s_current_audio == NULL) {
@@ -125,6 +111,7 @@ void bmbbp_cancel_current_song(void)
 {
 	if (s_current_audio != NULL) {
 		audio_cancel();
+		motor_cancel();
 	}
 }
 
@@ -135,7 +122,13 @@ const char *bmbbp_start_playing(void)
 		return NULL;
 	}
 
+	int64_t initial_timestamp = k_uptime_get();
+
 	if (audio_play(s_current_audio->wav) != 0) {
+		return NULL;
+	}
+
+	if (motor_start(s_current_audio->instructions, initial_timestamp) != 0) {
 		return NULL;
 	}
 

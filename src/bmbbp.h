@@ -1,6 +1,8 @@
 #ifndef __BMBBP_H__
 #define __BMBBP_H__
 
+#include <zephyr/sys/slist.h>
+
 typedef enum {
 	HEAD,
 	MOUTH,
@@ -11,14 +13,13 @@ typedef enum {
 struct movement_instruction {
 	sys_snode_t node;
 	movement_t type;
-	uint32_t timestamp;
+	int32_t timestamp;
 };
 
 struct bmbbp_audio {
 	sys_snode_t node;
 	const char *wav;
 	sys_slist_t instructions;
-	struct movement_instruction *current_instruction;
 };
 
 int bmbbp_init();
