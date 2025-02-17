@@ -80,7 +80,7 @@ void handle_motors(void *, void *, void *)
 
 	while (inst != NULL && !s_ctx.cancel) {
 		int64_t current_time = k_uptime_get();
-		if (start_time + inst->timestamp < current_time) {
+		if (start_time + inst->timestamp > current_time) {
 			k_msleep(start_time + inst->timestamp - current_time);
 		}
 		process_instruction(inst);
