@@ -5,6 +5,7 @@
 
 #include "bmbbp.h"
 #include "motor.h"
+#include "audio.h"
 
 static const struct gpio_dt_spec mouth0 = GPIO_DT_SPEC_GET(DT_NODELABEL(mouth0), gpios);
 static const struct gpio_dt_spec mouth1 = GPIO_DT_SPEC_GET(DT_NODELABEL(mouth1), gpios);
@@ -24,7 +25,6 @@ static struct {
 	bool cancel;
 	sys_slist_t instructions;
 	struct movement_instruction *current_instruction;
-	int64_t start_time;
 } s_ctx;
 
 static void move_head(void)
@@ -75,13 +75,12 @@ static void process_instruction(const struct movement_instruction *inst)
 
 void handle_motors(void *, void *, void *)
 {
-	int64_t start_time = s_ctx.start_time;
 	struct movement_instruction *inst = SYS_SLIST_PEEK_HEAD_CONTAINER(&s_ctx.instructions, inst, node);
 
 	while (inst != NULL && !s_ctx.cancel) {
-		int64_t current_time = k_uptime_get();
-		if (start_time + inst->timestamp > current_time) {
-			k_msleep(start_time + inst->timestamp - current_time);
+		uint32_t playtime = audio_playtime();
+		if (inst->timestamp > playtime) {
+			k_msleep(inst->timestamp - playtime);
 		}
 		process_instruction(inst);
 		inst = SYS_SLIST_PEEK_NEXT_CONTAINER(inst, node);
@@ -127,7 +126,6 @@ int motor_start(sys_slist_t instructions, int64_t initial_timestamp)
 		return -EBUSY;
 	}
 
-	s_ctx.start_time = initial_timestamp;
 	s_ctx.instructions = instructions;
 
 	s_ctx.cancel = false;

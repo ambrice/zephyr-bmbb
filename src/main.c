@@ -5,11 +5,14 @@
  */
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/hwinfo.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/input/input.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/disk_access.h>
+#include <zephyr/sys/poweroff.h>
 
 #include "bmbbp.h"
 
@@ -18,6 +21,8 @@
 #define FS_RET_OK FR_OK
 
 #include <ff.h>
+
+LOG_MODULE_REGISTER(bmbb);
 
 static FATFS fat_fs;
 /* mounting info */
@@ -29,11 +34,34 @@ static struct fs_mount_t mp = {
 
 #define FS_RET_OK FR_OK
 
-LOG_MODULE_REGISTER(bmbb);
-
 static const char *disk_mount_pt = DISK_MOUNT_PT;
 
 void register_shell_cmds(void);
+
+static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_NODELABEL(button1), gpios);
+
+static void shutdown_handler(struct k_timer *timer_id)
+{
+	int ret;
+
+	/* configure button1 as input, interrupt as level active to allow wake-up */
+	ret = gpio_pin_configure_dt(&button1, GPIO_INPUT);
+	if (ret < 0) {
+		LOG_INF("Could not configure button1 GPIO (%d)\n", ret);
+		return;
+	}
+
+	ret = gpio_pin_interrupt_configure_dt(&button1, GPIO_INT_LEVEL_ACTIVE);
+	if (ret < 0) {
+		LOG_INF("Could not configure button1 GPIO interrupt (%d)\n", ret);
+		return;
+	}
+	LOG_INF("Shutting down");
+	k_sleep(K_SECONDS(5));
+	sys_poweroff();
+}
+
+K_TIMER_DEFINE(shutdown_timer, shutdown_handler, NULL);
 
 /* List dir entry by path
  *
@@ -109,7 +137,9 @@ static void input_cb(struct input_event *evt, void *user_data)
 		const char *wav = bmbbp_next_song();
 		LOG_INF("Playing song %s", wav);
 		bmbbp_start_playing();
+		k_timer_start(&shutdown_timer, K_SECONDS(30), K_NO_WAIT);
 	} else if (evt->code == INPUT_KEY_B && evt->value == 1) {
+		k_timer_start(&shutdown_timer, K_SECONDS(30), K_NO_WAIT);
 		LOG_INF("Long press, switching mode");
 		/* TODO: switch between songs and jokes (files in SONGS/ or JOKES/ directories) */
 	}
@@ -120,6 +150,11 @@ INPUT_CALLBACK_DEFINE(longpress_dev, input_cb, NULL);
 
 int main(void)
 {
+	uint32_t reset_cause;
+	hwinfo_get_reset_cause(&reset_cause);
+	hwinfo_clear_reset_cause();
+	LOG_INF("Reset cause: 0x%04x", reset_cause);
+
 	mp.mnt_point = disk_mount_pt;
 
 	int res = fs_mount(&mp);
@@ -132,6 +167,16 @@ int main(void)
 	}
 
 	bmbbp_init();
+
+	if (reset_cause & RESET_LOW_POWER_WAKE) {
+		// Woken up from pressing the button, play the song
+		bmbbp_cancel_current_song();
+		const char *wav = bmbbp_next_song();
+		LOG_INF("Playing song %s", wav);
+		bmbbp_start_playing();
+	}
+
+	k_timer_start(&shutdown_timer, K_SECONDS(30), K_NO_WAIT);
 
 	return 0;
 }

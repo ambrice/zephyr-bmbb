@@ -34,6 +34,7 @@ static struct {
 	bool cancel;
 	void *mem_block[BLOCK_COUNT];
 	struct fs_file_t file;
+	int64_t start_timestamp;
 } s_ctx;
 
 void handle_playback(void *, void *, void *)
@@ -56,6 +57,9 @@ void handle_playback(void *, void *, void *)
 	}
 	k_yield();
 
+	s_ctx.start_timestamp = k_uptime_get();
+	LOG_INF("Starting the stream at: %lld", s_ctx.start_timestamp);
+
 	/* Start the stream */
 	ret = i2s_trigger(s_ctx.i2s_dev, I2S_DIR_TX, I2S_TRIGGER_START);
 	if (ret < 0) {
@@ -64,7 +68,6 @@ void handle_playback(void *, void *, void *)
 	}
 
 	/* Fill with the rest */
-	int count=0;
 	int block_idx = 1;
 	do {
 		k_yield();
@@ -90,7 +93,6 @@ void handle_playback(void *, void *, void *)
 			/* End of file */
 			break;
 		}
-		LOG_INF("Sent block %d", count++);
 		block_idx = (block_idx + 1) % BLOCK_COUNT;
 	} while(1);
 
@@ -136,6 +138,8 @@ int audio_init(void)
 		}
 	}
 
+	s_ctx.start_timestamp = -1;
+
 	return ret;
 }
 
@@ -176,6 +180,7 @@ int audio_play(const char *filename)
 		return len;
 	}
 
+	/*
 	LOG_INF("Wav file data:");
 	LOG_INF("\tfile_type_block_id=0x%08x", wavh.file_type_bloc_id);
 	LOG_INF("\tfile_size=%d", wavh.file_size);
@@ -190,6 +195,7 @@ int audio_play(const char *filename)
 	LOG_INF("\tbits_per_sample=%d", wavh.bits_per_sample);
 	LOG_INF("\tdata_block_id=0x%08x", wavh.data_block_id);
 	LOG_INF("\tdata_size=%d", wavh.data_size);
+	*/
 
 	if (wavh.audio_format != 1 || wavh.nbr_channels != 1 || wavh.frequency != 44100 || wavh.bits_per_sample != 16) {
 		LOG_ERR("WAV file format incorrect, must be mono PCM, 16 bits per sample, 44100");
@@ -203,4 +209,12 @@ int audio_play(const char *filename)
 			handle_playback, NULL, NULL, NULL, 5, 0, K_NO_WAIT);
 
 	return 0;
+}
+
+uint32_t audio_playtime(void)
+{
+	if (s_ctx.start_timestamp == -1) {
+		return 0;
+	}
+	return k_uptime_get() - s_ctx.start_timestamp;
 }

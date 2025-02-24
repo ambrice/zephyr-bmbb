@@ -123,6 +123,7 @@ const char *bmbbp_start_playing(void)
 	}
 
 	int64_t initial_timestamp = k_uptime_get();
+	LOG_INF("Initial timestamp: %lld", initial_timestamp);
 
 	if (audio_play(s_current_audio->wav) != 0) {
 		return NULL;

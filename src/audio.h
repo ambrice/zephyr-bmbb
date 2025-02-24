@@ -1,6 +1,9 @@
 #ifndef __AUDIO_H__
 #define __AUDIO_H__
 
+#include <stdint.h>
+#include <stdbool.h>
+
 /* From wikipedia:
  * [Master RIFF chunk]
  *	  FileTypeBlocID  (4 bytes) : Identifier « RIFF »  (0x52, 0x49, 0x46, 0x46)
@@ -48,5 +51,7 @@ int audio_play(const char *filename);
 void audio_cancel(void);
 
 bool audio_busy(void);
+
+uint32_t audio_playtime(void);
 
 #endif
