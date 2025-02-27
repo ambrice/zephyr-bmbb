@@ -38,6 +38,8 @@ static const char *disk_mount_pt = DISK_MOUNT_PT;
 
 void register_shell_cmds(void);
 
+#define SHUTDOWN_TIME K_SECONDS(60)
+
 static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_NODELABEL(button1), gpios);
 
 static void shutdown_handler(struct k_timer *timer_id)
@@ -137,9 +139,9 @@ static void input_cb(struct input_event *evt, void *user_data)
 		const char *wav = bmbbp_next_song();
 		LOG_INF("Playing song %s", wav);
 		bmbbp_start_playing();
-		k_timer_start(&shutdown_timer, K_SECONDS(30), K_NO_WAIT);
+		k_timer_start(&shutdown_timer, SHUTDOWN_TIME, K_NO_WAIT);
 	} else if (evt->code == INPUT_KEY_B && evt->value == 1) {
-		k_timer_start(&shutdown_timer, K_SECONDS(30), K_NO_WAIT);
+		k_timer_start(&shutdown_timer, SHUTDOWN_TIME, K_NO_WAIT);
 		LOG_INF("Long press, switching mode");
 		/* TODO: switch between songs and jokes (files in SONGS/ or JOKES/ directories) */
 	}
@@ -176,7 +178,7 @@ int main(void)
 		bmbbp_start_playing();
 	}
 
-	k_timer_start(&shutdown_timer, K_SECONDS(30), K_NO_WAIT);
+	k_timer_start(&shutdown_timer, SHUTDOWN_TIME, K_NO_WAIT);
 
 	return 0;
 }

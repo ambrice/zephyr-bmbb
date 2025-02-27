@@ -55,7 +55,8 @@ static int add_instructions(const char *datfilename, sys_slist_t *instructions)
 			new->type = RELEASE;
 			break;
 		}
-		new->timestamp = strtoul(&line[1], NULL, 10);
+		/* Subtracting a 100ms fudge factor because that seems to match up better. */
+		new->timestamp = strtoul(&line[1], NULL, 10) - 100;
 		sys_slist_append(instructions, &new->node);
 	}
 	fs_close(&datfile);
