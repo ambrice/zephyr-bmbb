@@ -35,10 +35,12 @@ static struct fs_mount_t mp = {
 #define FS_RET_OK FR_OK
 
 static const char *disk_mount_pt = DISK_MOUNT_PT;
+static const char *disk_songs_dir = DISK_MOUNT_PT"/SONGS";
+static const char *disk_jokes_dir = DISK_MOUNT_PT"/JOKES";
 
 void register_shell_cmds(void);
 
-#define SHUTDOWN_TIME K_SECONDS(60)
+#define SHUTDOWN_TIME K_SECONDS(600)
 
 static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_NODELABEL(button1), gpios);
 
@@ -72,7 +74,7 @@ K_TIMER_DEFINE(shutdown_timer, shutdown_handler, NULL);
  * @return Negative errno code on error, number of listed entries on
  *		   success.
  */
-static int find_songs(const char *path)
+static int find_songs(bmbbp_mode_t mode, const char *path)
 {
 	int res;
 	struct fs_dir_t dirp;
@@ -102,6 +104,7 @@ static int find_songs(const char *path)
 			size_t namelen = strlen(entry.name);
 			if (strncmp(entry.name + namelen - 4, ".WAV", 4) == 0)
 			{
+				LOG_INF("Found wav file %s", entry.name);
 				/* Find the .dat file with the instructions */
 				size_t buffersz = strlen(path) + namelen + 2;
 				char *wavfile = k_malloc(buffersz);
@@ -118,7 +121,7 @@ static int find_songs(const char *path)
 				} else {
 					LOG_ERR("Couldn't find the . in filename %s ?!", datfile);
 				}
-				bmbbp_add(wavfile, datfile);
+				bmbbp_add(mode, wavfile, datfile);
 			}
 		}
 	}
@@ -143,7 +146,7 @@ static void input_cb(struct input_event *evt, void *user_data)
 	} else if (evt->code == INPUT_KEY_B && evt->value == 1) {
 		k_timer_start(&shutdown_timer, SHUTDOWN_TIME, K_NO_WAIT);
 		LOG_INF("Long press, switching mode");
-		/* TODO: switch between songs and jokes (files in SONGS/ or JOKES/ directories) */
+		bmbbp_toggle_mode();
 	}
 }
 
@@ -163,7 +166,8 @@ int main(void)
 
 	if (res == FS_RET_OK) {
 		LOG_INF("Disk mounted.");
-		find_songs(disk_mount_pt);
+		find_songs(SONGS, disk_songs_dir);
+		find_songs(JOKES, disk_jokes_dir);
 	} else {
 		LOG_ERR("Error mounting disk.");
 	}

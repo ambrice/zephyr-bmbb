@@ -4,15 +4,20 @@
 #include <zephyr/sys/slist.h>
 
 typedef enum {
+	SONGS,
+	JOKES,
+} bmbbp_mode_t;
+
+typedef enum {
 	HEAD,
 	MOUTH,
 	TAIL,
 	RELEASE,
-} movement_t;
+} bmbbp_movement_t;
 
 struct movement_instruction {
 	sys_snode_t node;
-	movement_t type;
+	bmbbp_movement_t type;
 	int32_t timestamp;
 };
 
@@ -24,7 +29,9 @@ struct bmbbp_audio {
 
 int bmbbp_init();
 
-int bmbbp_add(const char *wavfilename, const char *datfilename);
+int bmbbp_add(bmbbp_mode_t mode, const char *wavfilename, const char *datfilename);
+
+void bmbbp_toggle_mode(void);
 
 const char *bmbbp_next_song(void);
 

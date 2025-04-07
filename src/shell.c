@@ -67,10 +67,17 @@ static int bmbb_play_handler(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+static int bmbb_mode_handler(const struct shell *sh, size_t argc, char **argv)
+{
+	bmbbp_toggle_mode();
+	return 0;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_bmbb,
 		SHELL_CMD(cancel, NULL, "Cancel current audio", bmbb_cancel_handler),
 		SHELL_CMD(next, NULL, "Set to next audio", bmbb_next_handler),
 		SHELL_CMD(play, NULL, "Play current audio", bmbb_play_handler),
+		SHELL_CMD(mode, NULL, "Toggle songs/jokes mode", bmbb_mode_handler),
 		SHELL_SUBCMD_SET_END
 );
 

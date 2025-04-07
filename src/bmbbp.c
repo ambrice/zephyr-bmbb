@@ -11,7 +11,9 @@
 /* Source code for the Big Mouth Billy Bass Protocol (bmbbp) */
 
 /* Top list of audio files, which each have a list of instructions associated */
-static sys_slist_t s_audios = SYS_SLIST_STATIC_INIT(&s_audios);
+static sys_slist_t s_song_audios = SYS_SLIST_STATIC_INIT(&s_song_audios);
+static sys_slist_t s_joke_audios = SYS_SLIST_STATIC_INIT(&s_joke_audios);
+static bmbbp_mode_t s_mode = SONGS;
 static struct bmbbp_audio *s_current_audio = NULL;
 
 LOG_MODULE_DECLARE(bmbb);
@@ -55,8 +57,8 @@ static int add_instructions(const char *datfilename, sys_slist_t *instructions)
 			new->type = RELEASE;
 			break;
 		}
-		/* Subtracting a 100ms fudge factor because that seems to match up better. */
-		new->timestamp = strtoul(&line[1], NULL, 10) - 100;
+		/* Subtracting a 200ms fudge factor because that seems to match up better. */
+		new->timestamp = strtoul(&line[1], NULL, 10) - 200;
 		sys_slist_append(instructions, &new->node);
 	}
 	fs_close(&datfile);
@@ -67,17 +69,19 @@ int bmbbp_init(void)
 {
 	audio_init();
 	motor_init();
+	s_mode = SONGS;
 	return 0;
 }
 
-int bmbbp_add(const char *wavfilename, const char *datfilename)
+int bmbbp_add(bmbbp_mode_t mode, const char *wavfilename, const char *datfilename)
 {
+	sys_slist_t *audiolist = mode == SONGS ? &s_song_audios : &s_joke_audios;
 	struct bmbbp_audio *new = k_malloc(sizeof(struct bmbbp_audio));
 	new->wav = wavfilename;
 	sys_slist_init(&new->instructions);
 	if (add_instructions(datfilename, &new->instructions) == 0) {
 		LOG_INF("Added %d instructions for song %s", sys_slist_len(&new->instructions), new->wav);
-		sys_slist_append(&s_audios, &new->node);
+		sys_slist_append(audiolist, &new->node);
 		return 0;
 	} else {
 		/* Failed to parse instructions, don't add this to the list */
@@ -86,10 +90,16 @@ int bmbbp_add(const char *wavfilename, const char *datfilename)
 	}
 }
 
+void bmbbp_toggle_mode(void) {
+	s_mode = !s_mode;
+	s_current_audio = NULL;
+}
+
 const char *bmbbp_next_song(void)
 {
-	if (s_current_audio == NULL || s_current_audio == SYS_SLIST_PEEK_TAIL_CONTAINER(&s_audios, s_current_audio, node)) {
-		s_current_audio = SYS_SLIST_PEEK_HEAD_CONTAINER(&s_audios, s_current_audio, node);
+	sys_slist_t *audiolist = s_mode == SONGS ? &s_song_audios : &s_joke_audios;
+	if (s_current_audio == NULL || s_current_audio == SYS_SLIST_PEEK_TAIL_CONTAINER(audiolist, s_current_audio, node)) {
+		s_current_audio = SYS_SLIST_PEEK_HEAD_CONTAINER(audiolist, s_current_audio, node);
 	} else {
 		s_current_audio = SYS_SLIST_PEEK_NEXT_CONTAINER(s_current_audio, node);
 	}
